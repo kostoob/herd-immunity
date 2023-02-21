@@ -1,0 +1,191 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+
+
+```{r}
+setwd("/Users/kaustubhrajimwale/Desktop/Fall 21/STAT512/Project")
+data = read.csv("europe_data.csv", header = TRUE)
+
+data$y = data$total_deaths_per_million
+
+model<-lm(y~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, data=data)
+
+summary(model)
+```
+
+
+```{r}
+library(onewaytests)
+library(ggplot2)
+data$group <- cut_number(data$y, 5)
+data$residuals <- model$residuals
+bf.test(residuals ~ group, data)
+
+shapiro.test(residuals(model))
+qqnorm(residuals(model))
+qqline(residuals(model))
+```
+
+
+```{r}
+
+library(MASS)
+bcmle<-boxcox(model,lambda=seq(0,1, by=0.01))
+lambda<-bcmle$x[which.max(bcmle$y)]
+lambda
+
+data$ty<-(data$y)^lambda
+modelT <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, data=data)
+
+summary(modelT)
+
+```
+```{r}
+library(onewaytests)
+library(ggplot2)
+data$group <- cut_number(data$ty, 5)
+data$residuals <- modelT$residuals
+bf.test(residuals ~ group, data)
+
+shapiro.test(residuals(modelT))
+qqnorm(residuals(modelT))
+qqline(residuals(modelT))
+```
+
+```{r}
+#WLS - iteration1
+wts1 <- 1/fitted(lm(abs(residuals(modelT))~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, data))^2
+
+wls_modelT <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, weights = wts1, data = data)
+
+library(onewaytests)
+library(ggplot2)
+data$group <- cut_number(data$ty, 5)
+data$residuals <- wls_modelT$residuals
+bf.test(residuals ~ group, data)
+```
+
+
+```{r}
+#WLS - iteration2
+wts2 <- 1/fitted(lm(abs(residuals(wls_modelT))~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, data))^2
+
+wls_modelT2 <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, weights = wts2, data = data)
+
+library(onewaytests)
+library(ggplot2)
+data$group <- cut_number(data$ty, 5)
+data$residuals <- wls_modelT2$residuals
+bf.test(residuals ~ group, data)
+```
+
+```{r}
+#WLS - iteration3
+wts3 <- 1/fitted(lm(abs(residuals(wls_modelT2))~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, data))^2
+
+wls_modelT3 <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, weights = wts3, data = data)
+
+library(onewaytests)
+library(ggplot2)
+data$group <- cut_number(data$ty, 5)
+data$residuals <- wls_modelT3$residuals
+bf.test(residuals ~ group, data)
+```
+
+```{r}
+#WLS - iteration4
+wts4 <- 1/fitted(lm(abs(residuals(wls_modelT3))~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, data))^2
+
+model_v3 <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+population_density+median_age+gdp_per_capita+hospital_beds_per_thousand, weights = wts4, data = data)
+```
+
+```{r}
+library(onewaytests)
+library(ggplot2)
+data$group <- cut_number(data$ty, 5)
+data$residuals <- model_v3$residuals
+bf.test(residuals ~ group, data)
+
+shapiro.test(residuals(model_v3))
+qqnorm(residuals(model_v3))
+qqline(residuals(model_v3))
+plot(model_v3$fitted.values, model_v3$residuals)
+```
+
+```{r}
+library(ALSM)
+x <- cbind(data$people_fully_vaccinated_per_hundred, data$stringency_index, data$population_density, data$median_age, data$gdp_per_capita, data$hospital_beds_per_thousand)
+
+bs <- BestSub(x, data$ty , num = 1)
+bs
+```
+
+```{r}
+model_v5 <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+median_age, data=data)
+summary(model_v5)
+```
+
+```{r}
+pairs(~people_fully_vaccinated_per_hundred+stringency_index+median_age, data)
+x <- cbind(data$people_fully_vaccinated_per_hundred, data$stringency_index, data$median_age)
+colnames(x) <- c("people_fully_vaccinated_per_hundred","stringency_index","median_age")
+cor_mat = cor(x)
+```
+
+```{r}
+library(lmridge)
+model_ridge <-lmridge(ty~people_fully_vaccinated_per_hundred+stringency_index+median_age, data = data, K = seq(0,10,1), wts=wts4)
+plot(model_ridge)
+vif(model_ridge)
+```
+
+```{r}
+library(car)
+avPlots(model_v5)
+```
+
+```{r}
+library(car)
+influencePlot(model_v5)
+```
+
+```{r}
+setwd("/Users/kaustubhrajimwale/Desktop/Fall 21/STAT512/Project")
+write.table(dffits(model_v5),file="dffits_data.csv", sep = ',')
+write.table(cooks.distance(model_v5),file="cooksdistance_data.csv", sep = ',')
+write.table(dfbetas(model_v5),file="dfbetas_data.csv", sep = ',')
+
+
+sum(abs(dffits(model_v5))>1) #number of points of influence
+sum(pf(cooks.distance(model_v5),4,35)<0.2) #little influence
+sum(pf(cooks.distance(model_v5),4,35)>0.5) #major influence
+sum(dfbetas(model_v5)>1) #large impact
+
+data1 <- data[-c(3),]
+```
+
+```{r}
+model_v6 <- lm(ty~people_fully_vaccinated_per_hundred+stringency_index+median_age, data=data1)
+sum(abs(dffits(model_v6))>1) #number of points of influence
+sum(pf(cooks.distance(model_v6),4,34)<0.2) #little influence
+sum(pf(cooks.distance(model_v6),4,34)>0.5) #major influence
+sum(dfbetas(model_v6)>1) #large impact
+```
+
+```{r}
+library(caret)
+
+set.seed(123)
+
+#specify the cross-validation method
+ctrl <- trainControl(method = "cv", number = 5)
+
+#fit a regression model and use k-fold CV to evaluate performance
+model_cv <- train(ty~people_fully_vaccinated_per_hundred+stringency_index+median_age, data = data1, method = "lm", trControl = ctrl)
+
+#view summary of k-fold CV               
+print(model_cv)
+```
